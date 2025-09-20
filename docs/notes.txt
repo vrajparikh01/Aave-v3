@@ -1,0 +1,170 @@
+Aave V3 Notes:
+
+Aave is a decentralized non-custodial liquidity markets protocol where users can participate as suppliers or borrowers. Suppliers provide liquidity to the market to earn a passive income, while borrowers are able to borrow in an overcollateralized (perpetually) or undercollateralized (one-block liquidity) fashion.
+
+Important Terminologies:
+
+Health Factor: 
+- Indicates the safety of a user's loan. If it drops below 1, the loan is subject to liquidation.
+- Calculated as (Total Collateral Value * Liquidation Threshold) / Total Borrowed Value.
+- A higher Health Factor means a safer loan position.
+- Users can improve their Health Factor by adding more collateral or repaying part of their loan.
+- Liquidation occurs when the Health Factor falls below 1, allowing liquidators to repay a portion of the borrower's debt in exchange for a portion of their collateral at a discount.
+
+Reserve Size: Amount of a specific asset available in the Aave protocol for lending and borrowing.
+Available Liquidity: The amount of an asset that is currently available for users to borrow from the Aave protocol.
+Total Debt: The total amount of an asset that has been borrowed from the Aave protocol by users.
+
+Utilization Rate: The percentage of the total available liquidity that has been borrowed. It is calculated as (Total Debt / Reserve Size) * 100.
+- Amount of tokens that are borrowed against the total amount of tokens available in the reserve.
+- It is a number betwween 0 and 1
+- If B = total debt and S = available liquidity, then Utilization Rate = B / (B + S)
+- A higher Utilization Rate indicates that more of the available liquidity has been borrowed, which can lead to higher interest rates for borrowers
+- A lower Utilization Rate indicates that more liquidity is available for borrowing, which can lead to lower interest rates for borrowers
+- A Utilization Rate of 100% means that all available liquidity has been borrowed, and no more liquidity is available for borrowing until some of the debt is repaid.
+- A Utilization Rate of 0% means that no liquidity has been borrowed
+
+Optimal Utilization Rate: It is the rate at which the interest rates for borrowing and lending are optimized. When the utilization rate is above the optimal rate, the interst rates rapidly increases.
+
+APR vs APY:
+- APR (Annual Percentage Rate) is the annual rate of interest without taking into account the effect of compounding.
+- APY (Annual Percentage Yield) is the annual rate of interest that takes into account the effect of compounding.
+- APY is always higher than APR for the same nominal interest rate, because it includes the effect of compounding.
+- If R is the periodic interest rate and N is the number of periods in a year, then:
+  - APR = R * N
+  - APY = (1 + R)^N - 1
+- For example, if the periodic interest rate is 1% and there are 12 periods in a year, then:
+  - APR = 1% * 12 = 12%
+  - APY = (1 + 0.01)^12 - 1 ≈ 12.68%
+
+Max LTV (Loan-to-Value ratio): Max amount that can be borrowed against a specific asset. It is expressed as a percentage of the asset's value.
+- For example, if an asset has a Max LTV of 75%, it means that a user can borrow up to 75% of the value of that asset as collateral.
+
+Liquidation Threshold: The threshold at which a user's loan becomes subject to liquidation. It is expressed as a percentage of the asset's value.
+- For example, if an asset has a Liquidation Threshold of 80%, it means that if the value of the user's collateral falls below 80% of the value of their borrowed amount, their loan may be subject to liquidation.
+
+Liquidation Penalty: The penalty applied to a user's collateral when their loan is liquidated. It is expressed as a percentage of the value of the collateral.
+- For example, if an asset has a Liquidation Penalty of 5%, it means that if a user's loan is liquidated, they will lose 5% of the value of their collateral.
+
+Isolated Assets: THese assets have limited borrowing power and they can only be used as collateral for borrowing other isolated assets. 
+- Borrowers using an isolated collateral asset can only borrow stablecoins that have been configured by Aave governance.
+- Suppliers of isolated assets cannot supply other assets as collateral
+
+Reserve Factor: The percentage of the interest paid by borrowers that is set aside as reserves for the Aave protocol. It is expressed as a percentage of the interest paid by borrowers to Aave.
+
+E mode: When enabled, you will have higher borrowing power for assets that are in the same category.
+eg: If you supply ETH and borrow WETH, you can enable e-mode to get higher borrowing power.
+
+A token: Rebase Token that you will receive when you supply assets to Aave. It represents your share of the liquidity pool and accrues interest in real-time.
+- aTokens are ERC20 tokens that are minted when you supply assets to Aave and burned when you withdraw assets from Aave.
+- aTokens are pegged 1:1 to the underlying asset. For example, if you supply 1 ETH to Aave, you will receive 1 aETH.
+- aTokens accrue interest in real-time, which means that the balance of aTokens in your wallet will increase over time as you earn interest on your supplied assets.
+- aTokens can be used as collateral for borrowing other assets on Aave.
+- aTokens can be transferred to other users, allowing you to sell or gift your interest-bearing tokens.
+
+variable debt token: Rebase Token that represents the variable rate debt that you have borrowed from Aave. It accrues interest in real-time.
+- Variable debt tokens are ERC20 tokens that are minted when you borrow assets from Aave at a variable interest rate and burned when you repay your variable rate debt.
+- Variable debt tokens accrue interest in real-time, which means that the balance of variable debt tokens in your wallet will increase over time as you accrue interest on your borrowed assets.
+- Variable debt tokens can be transferred to other users, allowing you to sell or gift your debt position.
+
+--------------------------------------------------------------------------------
+
+Code Architechture:
+- Aave interacts with Pool contract for all the core logic
+- Pool contract interacts with various other libraries like ValidationLogic, ReserveLogic, SupplyLogic, etc to perform specific tasks and store data in Pool contract
+- Now, ReserveLogic also interacts to set/get config data from ReserveConfiguration and UserConfiguration libraries
+- Pool contract also interacts with Aave Oracle contract to get the price of assets
+- Pool contract also interacts with IInterestRateStrategy contract to get the interest rates of assets
+- Pool contract also interacts with various other contracts like aToken and VariableDebtToken which will be seperate contracts for each asset
+
+------------------------------------------------------------------------------
+
+Functions:
+1. _mintScaled: 
+- Mints scaled aTokens to the user
+- Scaled balance is the balance of aTokens that a user has, adjusted for the interest that has accrued over time.
+- Scaled balance is calculated as the actual balance of aTokens divided by the liquidity index of the reserve.
+- For example, if a user has 100 aTokens and the liquidity index of the reserve is 1.05, then the scaled balance of aTokens is 100 / 1.05 = 95.24 aTokens.
+- Scaled balance is used to calculate the interest that a user earns on their supplied assets.
+- When a user supplies assets to Aave, they receive aTokens that represent their share of the liquidity pool. The actual balance of aTokens increases over time as the user earns interest on their supplied assets. However, the scaled balance remains constant, as it is adjusted for the interest that has accrued over time.
+
+2. supply:
+- Supplies an `amount` of underlying asset into the reserve, receiving in return overlying aTokens.
+- It takes the following parameters:
+  - asset: The address of the underlying asset to supply
+  - amount: The amount to be supplied
+  - onBehalfOf: The address that will receive the aTokens, same as msg.sender if the user is supplying for themselves, or a different address if the user is supplying on behalf of someone else.
+  - referralCode: Code used to register the integrator originating the operation, for potential rewards. 0 if the action is executed directly by the user, without any middle party.
+- It calls executeSupply function of SupplyLogic library to perform the supply operation and mint aTokens to the user.
+- Then it calls updateState function of ReserveLogic library to update the state of the reserve.
+- Next, it calls validateSupply function of ValidationLogic library to validate the supply operation.
+- It calls updateInterestRates function of ReserveLogic library to update the interest rates of the reserve.
+- And finally it calls AToken's mint function to mint aTokens to the user.
+
+3. borrow:
+- Allows users to borrow a specific `amount` of the reserve underlying asset, provided that the borrower has supplied enough collateral, or has been given enough allowance by a credit delegator on the specific asset.
+- It takes the following parameters:
+  - asset: The address of the underlying asset to borrow
+  - amount: The amount to be borrowed
+  - interestRateMode: The interest rate mode at which the user wants to borrow: 1 for Stable, 2 for Variable
+  - referralCode: Code used to register the integrator originating the operation, for potential rewards. 0 if the action is executed directly by the user, without any middle party.
+  - onBehalfOf: The address of the user who will receive the debt. Should be the address of the borrower itself if the user is borrowing against their own collateral, or the address of the credit delegator if the user is borrowing against a credit delegation.
+- It calls executeBorrow function of BorrowLogic library to perform the borrow operation and mint variable debt tokens to the user.
+- Then it calls updateState function of ReserveLogic library to update the state of the reserve.
+- Next, it calls validateBorrow function of ValidationLogic library to validate the borrow operation.
+- It calls updateInterestRates function of ReserveLogic library to update the interest rates of the reserve.
+- And finally it calls VariableDebtToken's mint function to mint variable debt tokens to the user.
+
+4. repay:
+- Repays a borrowed `amount` on a specific reserve, burning the equivalent debt tokens owned by the user.
+- It takes the following parameters:
+  - asset: The address of the borrowed underlying asset previously borrowed
+  - amount: The amount to repay
+  - interestRateMode: The interest rate mode at of the debt the user wants to repay: 1 for Stable, 2 for Variable
+  - onBehalfOf: The address of the user who will get his debt reduced/removed. Should be the address of the borrower itself if the user is repaying their own debt, or the address of any other borrower whose debt the user wants to repay.
+- The amount to be repaid will not be equal to amount of tokens borrowed, because the amount of tokens borrowed will increase over time as debt token is a rebase token.
+- It calls executeRepay function of RepayLogic library to perform the repay operation and burn variable debt tokens from the user.
+- Then it calls updateState function of ReserveLogic library to update the state of the reserve.
+- It calls getUserCurrentDebt function of Pool contract to get the current debt of the user.
+- Next, it calls validateRepay function of ValidationLogic library to validate the repay operation.
+- It calls updateInterestRates function of ReserveLogic library to update the interest rates of the reserve.
+- And finally it calls VariableDebtToken's burn function to burn variable debt tokens from the user.
+
+5. withdraw:
+- Allows users to withdraw a specific `amount` of the reserve underlying asset, burning the equivalent aTokens owned.
+- It takes the following parameters:
+  - asset: The address of the underlying asset to withdraw
+  - amount: The amount to be withdrawn
+  - to: The address that will receive the underlying, same as msg.sender if the user is withdrawing for themselves, or a different address if the user is withdrawing on behalf of someone else.
+- The amount to be withdrawn will not be equal to amount of tokens supplied, because the amount of tokens supplied will increase over time as a token is a rebase token.
+- Specify type(uint256).max for amount to withdraw to withdraw all underlying tokens so that you don't have to calculate the exact amount of aTokens you have.
+- It calls executeWithdraw function of WithdrawLogic library to perform the withdraw operation and burn aTokens from the user.
+- Then it calls updateState function of ReserveLogic library to update the state of the reserve.
+- Next, it calls validateWithdraw function of ValidationLogic library to validate the withdraw operation.
+- It calls updateInterestRates function of ReserveLogic library to update the interest rates of the reserve.
+- And finally it calls AToken's burn function to burn aTokens from the user.
+
+-----------------------------------------------------------------------------
+
+Close Factor: The maximum percentage of a borrower's total debt that can be liquidated
+- Maximum debt to repay during a liquidation, there are 2 conditions:
+  1. Default: 100% of the debt can be repaid during a liquidation
+  2. Other condition: 50% of the debt can be repaid during a liquidation
+- For other condition, collateral to liquidate and debt to repay > MIN_BASE_MAX_CLOSE_FACTOR_THRESHOLD which is now set to 2000$
+- Health factor must be < 1 and > 0.95
+- Debt to repay > user's total debt * DEFAULT_LIQUIDATION_CLOSE_FACTOR which is now set to 50%
+
+Hom many collateral to liquidate:
+- Debt to cover * Debt price = Collateral to liquidate * Collateral price 
+- Total amount of collateral to liquidate will include liquidation bonus and protocol fee
+- When your collateral is small then even if your health factor is less than 1, your collateral will not be liquidated becuase tx fee will cost more
+
+Financial strategies:
+1. Long leverage: Bet that price of an asset will go up
+- Strategy: Borrow cash -> Buy asset -> Sell asset -> Repay cash
+- Max borrow = Ltv * collateral amount * collateral price
+Eg: Eth price is 2000$ and you buy 1 ETH -> use 1 ETH as collateral to borrow 1800$(Ltv is 0.9) -> Buy 0.9 ETH -> Now you have 1.9 ETH -> If price of ETH goes to 4000$ -> Sell 1.9 ETH to get 7600$ -> Profit will be 7600$ - 1800$ - 2000$ = 3800$
+Eg: If price of ETH goes to 1000$ -> Sell 1.9 ETH to get 1900$ -> Loss will be 2000$ + 1800$ - 1900$ = 1900$
+
+2. Short leverage: Bet that price of an asset will go down
+- Strategy: Borrow asset -> Sell asset -> Buy asset -> Repay asset
